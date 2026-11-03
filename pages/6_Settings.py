@@ -7,7 +7,7 @@ from config.settings import get_env
 from database.repositories import get_document_status, get_setting, record_document, save_setting
 from services.api_key_manager import ApiKeyManager
 from services.cover_letter_service import load_cover_letter_context, save_cover_letter_context
-from services.gmail_service import GmailService
+from services.gmail_service import GmailError, GmailService
 from services.pdf_service import extract_text_from_pdf_bytes, save_uploaded_pdf
 from services.profile_service import load_profile, parse_cv_text_to_profile, save_profile
 
@@ -123,10 +123,37 @@ st.write(f"Modèle : {get_env('GEMINI_MODEL', 'gemini-2.5-flash')}")
 
 st.subheader("Gmail")
 service = GmailService()
-if st.button("Connecter Gmail"):
+is_connected, connection_message = service.authentication_status()
+status_col, connect_col, disconnect_col = st.columns([2, 1, 1])
+status_col.write(f"Statut : **{'connecté' if is_connected else 'non connecté'}**")
+if not is_connected and not service.is_configured():
+    status_col.info(
+        "Déposez le fichier OAuth Desktop téléchargé depuis Google Cloud dans "
+        "`credentials/google_credentials.json`."
+    )
+elif not is_connected and service.token_path.exists() and connection_message:
+    status_col.warning(connection_message)
+else:
+    status_col.caption("Seule l'autorisation Gmail d'envoi est demandée. Aucun email n'est envoyé lors de la connexion.")
+
+if connect_col.button("Connecter Gmail", type="primary", disabled=is_connected):
     try:
         service.authorize()
-        st.success("Compte Gmail autorisé.")
-    except Exception as exc:
-        st.error(f"Erreur d'authentification Gmail : {exc}")
-st.write(f"Statut : {'connecté' if service.is_configured() else 'non connecté'}")
+        st.success("Gmail est autorisé. Vous pouvez revenir à cette page pour vérifier le statut.")
+        st.rerun()
+    except GmailError as exc:
+        st.error(str(exc))
+
+if disconnect_col.button("Déconnecter Gmail", disabled=not service.token_path.exists()):
+    try:
+        removed = service.disconnect()
+        if removed:
+            st.success(
+                "Jeton local supprimé. Pour révoquer également l'accès Google, "
+                "retirez l'application depuis les paramètres de sécurité de votre compte Google."
+            )
+        else:
+            st.info("Aucun jeton Gmail local à supprimer.")
+        st.rerun()
+    except GmailError as exc:
+        st.error(str(exc))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from io import BytesIO
 from email.message import EmailMessage
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
@@ -77,7 +77,7 @@ def test_email_composition_and_gmail_attachments():
     assert "Cordialement" in final
 
     message = GmailService().build_message(
-        "recrutement@example.ma", "Candidature", "Bonjour", [("cv.pdf", b"%PDF-test")]
+        "recrutement@example.ma", "Candidature", "Bonjour", [("cv.pdf", make_pdf())]
     )
     assert isinstance(message, EmailMessage)
     assert message["To"] == "recrutement@example.ma"
@@ -148,3 +148,13 @@ def test_excel_upload_can_be_read_for_batch_generation():
     dataframe = read_excel_upload(content, "Candidatures")
     assert dataframe.iloc[0]["Entreprise"] == "Exemple"
     assert dataframe.iloc[0]["E-mail"] == "contact@example.ma"
+
+
+def make_pdf() -> bytes:
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
